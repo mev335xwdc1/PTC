@@ -16,6 +16,8 @@
 
 import numpy as np
 import csv
+import sys
+# Importar a função de formatação do ficheiro funciones.py
 from funciones import formatar_numero
 
 def main():
@@ -33,83 +35,59 @@ def main():
         with open(file_csv, 'r', encoding='utf-8') as f:
             leitor = csv.reader(f, delimiter=';')
 
-            # Saltar as primeiras 4 linhas não relevantes
-            for _ in range(4):
+            # Saltar cabeçalhos (normalmente 2 linhas são suficientes neste CSV)
+            for _ in range(2): 
                 next(leitor, None)
 
             for linha in leitor:
-
-                # Ignorar linhas vazias ou cabeçalhos
-                if not linha or "Notas" in linha[0]:
+                # Ignorar linhas vazias ou notas de rodapé
+                if not linha or len(linha) < 2 or "Notas" in linha[0]:
                     continue
 
                 nome_completo = linha[0]
 
-                # Ignorar Total Nacional
+                # CORREÇÃO: No R1, o Total Nacional DEVE aparecer (veja-se imagem pág 2 do PDF)
+                # Vamos atribuir o código "00" para que fique em primeiro lugar na ordenação
                 if "Total Nacional" in nome_completo:
-                    continue
-
-                # Extrair código + nome (ex: "02 Albacete")
-                partes = nome_completo.split(" ", 1)
-                cod_prov = partes[0].strip()
-                nome_prov = partes[1].strip() if len(partes) > 1 else cod_prov
+                    cod_prov = "00"
+                    nome_prov = "Total Nacional"
+                else:
+                    # Extrair código e nome (ex: "02 Albacete")
+                    partes = nome_completo.split(" ", 1)
+                    cod_prov = partes[0].strip()
+                    nome_prov = partes[1].strip() if len(partes) > 1 else cod_prov
 
                 # --- Ler TOTAL 2017..2010 ---
-                # São as colunas 1 a 8 (sempre 8 valores)
-                raw_total = linha[1:9]
-
-                valores = []
-                for x in raw_total:
-                    x = x.strip()
-                    # Remover separadores de milhar
-                    x = x.replace(".", "")
-                    # números científicos tipo 4.6572132E7 são válidos em float()
-                    if x == "":
-                        x = "0"
-                    try:
+                # No CSV, os totais estão nas colunas 1 a 9 (exclusivo) = 8 valores
+                try:
+                    valores = []
+                    for x in linha[1:9]:
+                        # Limpar dados (tirar pontos, espaços)
+                        x = x.strip().replace(".", "")
+                        if x == "": x = "0"
                         valores.append(float(x))
-                    except ValueError:
-                        print(f"Aviso: valor inválido em {cod_prov} {nome_prov}: '{x}', convertido para 0")
-                        valores.append(0.0)
-
-                # Precisa exatamente de 8 valores
-                if len(valores) != 8:
-                    print(f"Aviso: linha ignorada por dados incompletos: {cod_prov} {nome_prov}")
+                    
+                    # Se não tivermos 8 anos de dados, ignoramos a linha por segurança
+                    if len(valores) == 8:
+                        dados_prov[cod_prov] = {
+                            "nome": nome_prov,
+                            "totais": np.array(valores, dtype=float)
+                        }
+                except ValueError:
                     continue
 
-                dados_prov[cod_prov] = {
-                    "nome": nome_prov,
-                    "totais": np.array(valores, dtype=float)
-                }
-
     except FileNotFoundError:
-        print("ERRO: ficheiro CSV não encontrado.")
+        print(f"ERRO: ficheiro CSV não encontrado em {file_csv}")
         return
 
-    # 4. Gerar variações (2011..2017)
-    # Diferenças entre anos consecutivos
-    # série[0] = 2017, série[7] = 2010  → diferença invertida?
-    #
-    # O CSV está em ordem: 2017, 2016, ..., 2010
-    #
-    # Para calcular
-    #   Abs(2011) = ano2011 - ano2010
-    # mas
-    #   serie = [2017, 2016, 2015, ..., 2010]
-    #
-    # Portanto índice:
-    #   2011 → série[6]
-    #   2010 → série[7]
-    #
-    # Geral:
-    #   dif_abs[ano] = serie[i] - serie[i+1]
-    #
-    # Vamos criar listas alinhadas com 2011..2017.
+    # 4. Configuração dos Anos
+    # A lista de dados lida do CSV está na ordem: [2017, 2016, 2015, ..., 2010]
+    lista_anos_csv = [2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010]
 
-    # Índices dos anos na série TOTAL: 2017..2010
-    anos = [2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010]
+    # CORREÇÃO: O PDF pede ordem Decrescente (2017 -> 2011)
+    loop_anos = range(2017, 2010, -1) 
 
-    # Vamos produzir um HTML igual ao estilo de R2
+    # 5. Gerar HTML
     html_header = """
 <!DOCTYPE html>
 <html lang="es">
@@ -132,66 +110,69 @@ def main():
             <tr>
                 <th rowspan="2" class="titulo">Provincia</th>
 """
-
-    # Cabeçalho (anos 2011..2017)
-    for ano in range(2011, 2018):
+    # Gerar cabeçalhos dos Anos
+    for ano in loop_anos:
         html_header += f'<th colspan="2" class="titulo">{ano}</th>'
     html_header += "</tr>\n<tr>"
 
-    for ano in range(2011, 2018):
+    # Gerar sub-cabeçalhos (Abs/Rel)
+    for ano in loop_anos:
         html_header += "<th>Abs</th><th>Rel (%)</th>"
 
     html_header += "</tr></thead><tbody>\n"
 
-    # 5. Corpo da tabela
     html_body = ""
 
-    # Ordenar por código da província
+    # Ordenar por código (00 Total Nacional aparece primeiro, depois 01, 02...)
     for cod in sorted(dados_prov.keys()):
         nome = dados_prov[cod]["nome"]
-        serie = dados_prov[cod]["totais"]  # [2017..2010]
+        serie = dados_prov[cod]["totais"] # Array numpy com os dados [2017...2010]
 
-        # Segurança
-        if len(serie) != 8:
-            print(f"Aviso: Série inválida para {cod} {nome}")
-            continue
+        # Formatar o nome da primeira coluna
+        display_nome = nome if cod == "00" else f"{cod} {nome}"
 
-        html_body += f"<tr><td style='text-align:left; font-weight:bold;'>{cod} {nome}</td>"
+        html_body += f"<tr><td style='text-align:left; font-weight:bold;'>{display_nome}</td>"
 
-        # Calcular para anos 2011..2017
-        for ano in range(2011, 2018):
-            idx_ano = anos.index(ano)      # posição do ano Y
-            idx_prev = idx_ano + 1         # posição do ano Y-1
+        # Calcular variações para cada ano do loop
+        for ano in loop_anos:
+            # Encontrar índices correspondentes na lista de dados original
+            idx_atual = lista_anos_csv.index(ano)
+            idx_anterior = idx_atual + 1 # O ano anterior é o próximo na lista (ex: 2016 vem depois de 2017)
 
-            if idx_prev >= len(serie):
-                abs_v = 0
-                rel_v = 0
+            if idx_anterior < len(serie):
+                val_atual = serie[idx_atual]
+                val_anterior = serie[idx_anterior]
+                
+                # Fórmula: Variação = Ano Atual - Ano Anterior
+                abs_v = val_atual - val_anterior
+                
+                # Fórmula Relativa: (Absoluta / Anterior) * 100
+                if val_anterior != 0:
+                    rel_v = (abs_v / val_anterior) * 100
+                else:
+                    rel_v = 0.0
+                
+                html_body += f"<td>{formatar_numero(abs_v)}</td>"
+                html_body += f"<td>{formatar_numero(rel_v)}</td>"
             else:
-                atual = serie[idx_ano]
-                anterior = serie[idx_prev]
-                abs_v = atual - anterior
-                rel_v = (abs_v / anterior * 100) if anterior != 0 else 0
-
-            html_body += f"<td>{formatar_numero(abs_v)}</td>"
-            html_body += f"<td>{formatar_numero(rel_v)}</td>"
+                html_body += "<td>-</td><td>-</td>"
 
         html_body += "</tr>\n"
 
     html_footer = """
         </tbody>
     </table>
-
 </body>
 </html>
 """
 
-    # 6. Gravar
+    # 6. Gravar Ficheiro
     try:
         with open(file_saida, "w", encoding="utf-8") as f:
             f.write(html_header + html_body + html_footer)
-        print("SUCESSO! Ficheiro gerado em:", file_saida)
-    except:
-        print("ERRO: não consegui escrever o ficheiro HTML.")
+        print(f"SUCESSO! Ficheiro gerado em: {file_saida}")
+    except Exception as e:
+        print(f"ERRO: Não consegui gravar o ficheiro HTML: {e}")
 
 if __name__ == "__main__":
     main()
