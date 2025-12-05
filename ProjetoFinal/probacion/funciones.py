@@ -1,5 +1,28 @@
 import csv
 from bs4 import BeautifulSoup
+import os
+
+#base directory = folder where funciones.py is located
+base_dir = os.path.dirname(os.path.abspath(__file__))
+projeto_dir = os.path.dirname(base_dir)
+
+def caminho(rel_path):
+    return os.path.join(projeto_dir, rel_path)
+
+#ficheiros de entrada
+file_csv = caminho("entradas/poblacionProvinciasHM2010-17.csv")
+file_comunidades = caminho("entradas/comunidadesAutonomas.htm")
+file_relacao = caminho("entradas/comunidadAutonoma-Provincia.htm")
+
+#ficheiros de saida
+file_saida_R1 = caminho("resultados/variacionProvincias.html")
+file_saida_R2 = caminho("resultados/poblacionComAutonomas.html")
+file_saida_R3 = caminho("imagenes/R3.png")
+file_saida_R4 = caminho("variacionComAutonomas.html")
+file_saida_R5 = caminho("imagenes/R5.png")
+
+anos = [2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010]
+anos_variacion = anos[:-1]
 
 def formatar_numero(numero):
     """
