@@ -1,20 +1,11 @@
 import numpy as np
 import csv
-import sys
-# Importar as funções que criámos no funciones.py
-from funciones import ler_comunidades, ler_relacao_prov_cca, formatar_numero
+from funciones import file_comunidades, file_relacao, file_csv, file_saida_R2, ler_comunidades, ler_relacao_prov_cca, formatar_numero
 
 def main():
     print("A iniciar o processamento R2...")
 
-    # 1. Definir os caminhos
-    # Nota: Confirmámos que as extensões são .htm e o csv está na pasta entradas
-    file_comunidades = "entradas/comunidadesAutonomas.htm"
-    file_relacao = "entradas/comunidadAutonoma-Provincia.htm"
-    file_csv = "entradas/poblacionProvinciasHM2010-17.csv"
-    file_saida = "resultados/poblacionComAutonomas.html"
-
-    # 2. Carregar os Dicionários (Mapas)
+    #carregar os Dicionários 
     try:
         dic_ccaa = ler_comunidades(file_comunidades)
         dic_mapa = ler_relacao_prov_cca(file_relacao)
@@ -24,15 +15,14 @@ def main():
         print("Verifica se a pasta 'entradas' existe e se os ficheiros têm a extensão correta (.htm).")
         return
 
-    # 3. Preparar Estrutura de Dados (Numpy)
-    # 24 colunas de dados (8 anos Total + 8 anos Homens + 8 anos Mulheres)
+    # 24 colunas de dados (8 anos total + 8 anos homens + 8 anos mulheres)
     dados_agregados = {}
     
-    # Inicializar arrays a zeros para cada CCAA
+    #inicializar arrays a zeros para cada CCAA
     for cod_ccaa in dic_ccaa:
         dados_agregados[cod_ccaa] = np.zeros(24, dtype=float)
 
-    # 4. Ler CSV e Somar
+    #ler CSV e Somar
     try:
         with open(file_csv, 'r', encoding='utf-8') as f:
             leitor = csv.reader(f, delimiter=';')
@@ -41,44 +31,42 @@ def main():
                 next(leitor, None)
             
             for linha in leitor:
-                # Verificar se a linha tem dados suficientes, não é rodapé nem cabeçalho extra
+                #verificar se a linha tem dados suficientes, não é rodapé nem cabeçalho extra
                 if not linha or len(linha) < 2 or "Notas" in linha[0]:
                     continue
                 
                 nome_completo = linha[0]
-                # O enunciado diz para ignorar o Total Nacional neste exercício
+                #ignorar o Total Nacional neste exercício
                 if "Total Nacional" in nome_completo:
                     continue
                 
-                # O código da província são os primeiros caracteres (ex: "02 Albacete" -> "02")
+                #cod provincia (tipo 00)
                 partes = nome_completo.split(" ")
                 cod_prov = partes[0].strip()
                 
-                # Se encontrarmos a província no nosso mapa, somamos à comunidade correta
+                #somar as prov q encontramos a comunidade correta
                 if cod_prov in dic_mapa:
                     cod_ccaa = dic_mapa[cod_prov]
                     
                     valores = []
-                    # Lemos as colunas 1 a 25 (exclusivo), que contêm os dados numéricos
                     try:
                         for x in linha[1:25]:
-                            # Remove o ponto dos milhares (.) e troca vazio por 0 antes de converter
+                            #tirar o . dos milhares e vazio por 0 antes de converter
                             val_limpo = x.replace(".", "")
                             if val_limpo.strip() == "": 
                                 val_limpo = 0
                             valores.append(float(val_limpo))
                         
-                        # Converter para numpy array e somar ao acumulador da CCAA correspondente
+                        #passar para array e somar ao acumulador CCAA correspondente 
                         if cod_ccaa in dados_agregados:
                             dados_agregados[cod_ccaa] += np.array(valores, dtype=float)
                     except ValueError:
-                        continue # Ignora linhas com erros de conversão
+                        continue #ignora linhas com erros de conversão
 
     except FileNotFoundError:
         print(f"ERRO: Não encontrei o ficheiro CSV em {file_csv}")
         return
 
-    # 5. Gerar HTML de Saída
     html_header = """
 <!DOCTYPE html>
 <html lang="es">
@@ -127,7 +115,7 @@ def main():
             html_body += f"<td>{formatar_numero(val)}</td>"
         html_body += "\n</tr>"
 
-    # Rodapé com a Imagem do R3 incorporada
+    #rodapé com a imagem do R3 incorporada
     html_footer = """
         </tbody>
     </table>
@@ -143,11 +131,11 @@ def main():
 </html>
 """
 
-    # Gravar o ficheiro
+    #gravar o ficheiro
     try:
-        with open(file_saida, "w", encoding="utf-8") as f:
+        with open(file_saida_R2, "w", encoding="utf-8") as f:
             f.write(html_header + html_body + html_footer)
-        print(f"SUCESSO! Ficheiro gerado em: {file_saida}")
+        print(f"SUCESSO! Ficheiro gerado em: {file_saida_R2}")
     except FileNotFoundError:
         print("ERRO: Não consegui gravar o ficheiro. Verifica se a pasta 'resultados' existe.")
 
