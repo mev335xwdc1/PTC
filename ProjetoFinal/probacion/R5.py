@@ -1,20 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-import sys
-# Reutilizar as funções de leitura
-from funciones import ler_comunidades, ler_relacao_prov_cca
+from funciones import file_comunidades, file_relacao, file_csv, file_saida_R5, ler_comunidades, ler_relacao_prov_cca, anos
 
 def main():
     print("A iniciar R5 (Gráfico de Linhas)...")
 
-    # 1. Caminhos
-    file_comunidades = "entradas/comunidadesAutonomas.htm"
-    file_relacao = "entradas/comunidadAutonoma-Provincia.htm"
-    file_csv = "entradas/poblacionProvinciasHM2010-17.csv"
-    file_imagem = "imagenes/R5.png"
-
-    # 2. Carregar Dicionários
     try:
         dic_ccaa = ler_comunidades(file_comunidades)
         dic_mapa = ler_relacao_prov_cca(file_relacao)
@@ -22,8 +13,7 @@ def main():
         print("ERRO: Ficheiros HTML em falta.")
         return
 
-    # 3. Ler CSV e Agrupar (Igual ao R2/R3)
-    # Estrutura: 0-7 (Total), 8-15 (Homens), 16-23 (Mulheres)
+    #ler csv
     dados_agregados = {cod: np.zeros(24, dtype=float) for cod in dic_ccaa}
 
     try:
@@ -51,46 +41,41 @@ def main():
         print("ERRO: CSV não encontrado.")
         return
 
-    # 4. Determinar Top 10 (Pela média do Total)
+    #top 10 a partir da media 
     ranking = []
     for cod, valores in dados_agregados.items():
-        # Média dos índices 0 a 7 (Total 2017-2010)
         media = np.mean(valores[0:8])
         ranking.append((cod, media))
     
-    # Ordenar decrescente e apanhar os 10 primeiros
+    #prdenar top 10
     top_10 = sorted(ranking, key=lambda x: x[1], reverse=True)[:10]
 
-    # 5. Preparar Gráfico
-    # Os anos no CSV estão: 2017, 2016, ..., 2010
-    anos_str = ["2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017"]
-    
+    #grafico
     plt.figure(figsize=(10, 6))
 
-    # Desenhar uma linha para cada comunidade do Top 10
+    #linha para cada comunidade nno top 10
     for cod, _ in top_10:
         nome = dic_ccaa[cod]
-        valores_total = dados_agregados[cod][0:8] # Pegar apenas no bloco Total
+        valores_total = dados_agregados[cod][0:8] #usar apenas TOTAL
         
-        # O truque: Inverter a ordem para ficar 2010 -> 2017
+        #inverter a ordem 2010->2017
         valores_cronologicos = valores_total[::-1]
         
-        # Plotar a linha com marcadores ("o-")
-        plt.plot(anos_str, valores_cronologicos, marker='o', label=nome)
+        #plotar a linha com marcadores ("o-")
+        plt.plot(anos, valores_cronologicos, marker='o', label=nome)
 
-    # 6. Configuração Visual
+    #configuração visual
     plt.title("Población total en 2010-2017 (CCAA)")
-    plt.ylabel("1e6") # Indicação de escala (milhões)
+    plt.ylabel("1e6") 
     plt.grid(True, linestyle='--', alpha=0.5)
     
-    # Legenda fora do gráfico (para não tapar as linhas, como no PDF)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
     
-    plt.tight_layout() # Ajusta tudo para caber na imagem
+    plt.tight_layout()
 
-    # 7. Guardar
-    plt.savefig(file_imagem)
-    print(f"SUCESSO: Gráfico gerado em {file_imagem}")
+    #guardar
+    plt.savefig(file_saida_R5)
+    print(f"SUCESSO: Gráfico gerado em {file_saida_R5}")
 
 if __name__ == "__main__":
     main()
